@@ -47,7 +47,7 @@ def spark(user: str = Query(...)):
     if expired:
         return expired
     if joint_holder:
-        return f"{user} tried to spark a joint, but {joint_holder} is already holding one 🚬"
+        return f"{user} tried to spark a joint, but {joint_holder} is already holding one"
     joint_holder = user
     last_pass_time = datetime.utcnow()
     pass_count = 0
@@ -71,7 +71,7 @@ def pass_joint(from_user: str = Query(...), to_user: str = Query(...)):
 
     joint_holder = to_user
     last_pass_time = datetime.utcnow()
-    return f"{from_user} passed the joint to {to_user} 🚬"
+    return f"{from_user} passed the joint to {to_user}"
 
 
 @app.get("/status")
@@ -88,3 +88,4 @@ def status():
 
     minutes_ago = int((datetime.utcnow() - last_pass_time).total_seconds() // 60)
     return f"The joint is currently with {joint_holder} (last pass {minutes_ago} min ago)."
+
