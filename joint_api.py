@@ -1,37 +1,54 @@
-from fastapi import FastAPI, Query, Response
+from fastapi import FastAPI, Query
+from fastapi.responses import PlainTextResponse
 from datetime import datetime, timedelta
-from typing import Optional
 
 app = FastAPI()
 
-# Keep track of joint holder
-joint_holder: Optional[str] = None
-last_pass_time: Optional[datetime] = None
+# Joint state
+joint_holder: str | None = None
+last_pass_time: datetime | None = None
+timeout_minutes = 5
 
-# Timeout (Nightbot's timer is 5 min, so match that)
-JOINT_TIMEOUT = 5  # minutes
+
+# ---------- Helpers ----------
+def clean_user(name: str) -> str:
+    """Strip leading @ from Twitch usernames (people tab-complete with @)."""
+    return name.lstrip("@") if name else name
+
+
+def text_response(message: str):
+    """Return plain text for Nightbot."""
+    return PlainTextResponse(message)
+
+
+def minutes_ago(ts: datetime) -> str:
+    """Format elapsed minutes nicely with pluralization."""
+    mins = int((datetime.utcnow() - ts).total_seconds() // 60)
+    if mins <= 0:
+        return "just now"
+    if mins == 1:
+        return "1 minute ago"
+    return f"{mins} minutes ago"
 
 
 def check_timeout():
-    """Check if the joint has timed out and burn it if so."""
+    """Check if the current joint holder has timed out."""
     global joint_holder, last_pass_time
     if joint_holder and last_pass_time:
-        if datetime.utcnow() - last_pass_time > timedelta(minutes=JOINT_TIMEOUT):
-            expired_holder = joint_holder
+        if datetime.utcnow() - last_pass_time > timedelta(minutes=timeout_minutes):
+            expired_user = joint_holder
             joint_holder = None
             last_pass_time = None
-            return f"The joint burned out because {expired_holder} didn’t pass it in time 🔥"
+            return f"{expired_user} held the joint too long and it burned out 🔥"
     return None
 
 
-def text_response(msg: str) -> Response:
-    """Helper to return plain text (not JSON)."""
-    return Response(content=msg, media_type="text/plain")
-
-
+# ---------- Routes ----------
 @app.get("/spark")
 def spark(user: str = Query(...)):
     global joint_holder, last_pass_time
+    user = clean_user(user)
+
     expired = check_timeout()
     if expired:
         return text_response(expired)
@@ -47,6 +64,9 @@ def spark(user: str = Query(...)):
 @app.get("/pass")
 def pass_joint(from_user: str = Query(...), to_user: str = Query(...)):
     global joint_holder, last_pass_time
+    from_user = clean_user(from_user)
+    to_user = clean_user(to_user)
+
     expired = check_timeout()
     if expired:
         return text_response(expired)
@@ -60,18 +80,16 @@ def pass_joint(from_user: str = Query(...), to_user: str = Query(...)):
 
 
 @app.get("/status")
-def status(silent: bool = Query(False)):
+def status(silent: bool = False):
     expired = check_timeout()
     if expired:
         return text_response(expired)
 
     if not joint_holder:
-        if silent:
-            return text_response("")  # silent mode, no message if empty
         return text_response("Nobody has the joint right now. Spark one with !spark")
 
     if silent:
-        return text_response("")  # silent mode, only show timeouts
+        # Timer check → stay quiet unless burned out
+        return text_response("")
 
-    minutes_ago = int((datetime.utcnow() - last_pass_time).total_seconds() // 60)
-    return text_response(f"The joint is currently with {joint_holder} (passed {minutes_ago} min ago).")
+    return text_response(f"The joint is currently with {joint_holder} (passed {minutes_ago(last_pass_time)}).")
