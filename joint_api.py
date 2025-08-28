@@ -81,7 +81,7 @@ def pass_joint(from_user: str = Query(...), to_user: str = Query(...)):
         last_pass_time = None
         pass_count = 0
         return text_response(f"{from_user} passed the joint to Nightbot 🤖\n"
-                             f"Nightbot puff puff... smoked the whole joint 🔥💨")
+                             f"Nightbot puff puff... smoked the whole joint, sorry :P 🔥💨")
 
     # Normal pass
     joint_holder = to_user
@@ -121,3 +121,4 @@ def status(silent: bool = False):
 
     minutes_text = minutes_ago(last_pass_time)
     return text_response(f"The joint is currently with {joint_holder} (passed {minutes_text}).")
+
