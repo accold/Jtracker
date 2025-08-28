@@ -1,4 +1,4 @@
-This api works with nightbot, you will need to add these 3 commands and 1 timer. Nothing else is required. if its the 1st time running the command for the stream duration the server may need to wake up(free service) if iy doesnt respond try again in a few seconds
+This api works with nightbot, you will need to add these 3 commands and 1 timer. Nothing else is required. if its the 1st time running the command for the stream duration the server may need to wake up(free service) if it doesnt respond try again in a few seconds
 
 1️⃣ !spark
 Message:
