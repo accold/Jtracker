@@ -74,9 +74,18 @@ def pass_joint(from_user: str = Query(...), to_user: str = Query(...)):
     if joint_holder != from_user:
         return text_response(f"{from_user} can’t pass the joint because they don’t have it 👀")
 
+    # If passing to Nightbot → Nightbot smokes the whole joint
+    if to_user.lower() == "nightbot":
+        joint_holder = None
+        last_pass_time = None
+        return text_response(f"{from_user} passed the joint to Nightbot 🤖\n"
+                             f"Nightbot puff puff... smoked the whole joint 🔥💨")
+
+    # Normal pass
     joint_holder = to_user
     last_pass_time = datetime.utcnow()
     return text_response(f"{from_user} passed the joint to {to_user}")
+
 
 
 @app.get("/status")
@@ -93,3 +102,4 @@ def status(silent: bool = False):
         return text_response("")
 
     return text_response(f"The joint is currently with {joint_holder} (passed {minutes_ago(last_pass_time)}).")
+
