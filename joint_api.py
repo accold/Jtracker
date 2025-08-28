@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Response
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -24,19 +24,24 @@ def check_timeout():
     return None
 
 
+def text_response(msg: str) -> Response:
+    """Helper to return plain text (not JSON)."""
+    return Response(content=msg, media_type="text/plain")
+
+
 @app.get("/spark")
 def spark(user: str = Query(...)):
     global joint_holder, last_pass_time
     expired = check_timeout()
     if expired:
-        return {"message": expired}
+        return text_response(expired)
 
     if joint_holder:
-        return {"message": f"{user} tried to spark a joint, but {joint_holder} is already holding one"}
+        return text_response(f"{user} tried to spark a joint, but {joint_holder} is already holding one")
 
     joint_holder = user
     last_pass_time = datetime.utcnow()
-    return {"message": f"{user} sparked a joint💨"}
+    return text_response(f"{user} sparked a joint💨")
 
 
 @app.get("/pass")
@@ -44,33 +49,29 @@ def pass_joint(from_user: str = Query(...), to_user: str = Query(...)):
     global joint_holder, last_pass_time
     expired = check_timeout()
     if expired:
-        return {"message": expired}
+        return text_response(expired)
 
     if joint_holder != from_user:
-        return {"message": f"{from_user} can’t pass the joint because they don’t have it 👀"}
+        return text_response(f"{from_user} can’t pass the joint because they don’t have it 👀")
 
     joint_holder = to_user
     last_pass_time = datetime.utcnow()
-    return {"message": f"{from_user} passed the joint to {to_user}"}
+    return text_response(f"{from_user} passed the joint to {to_user}")
 
 
 @app.get("/status")
 def status(silent: bool = Query(False)):
-    """
-    Show joint status. 
-    If silent=true, only report burnouts (used by Nightbot timers).
-    """
     expired = check_timeout()
     if expired:
-        return {"message": expired}
+        return text_response(expired)
 
     if not joint_holder:
         if silent:
-            return {"message": ""}  # silent mode, no message if empty
-        return {"message": "Nobody has the joint right now. Spark one with !spark"}
+            return text_response("")  # silent mode, no message if empty
+        return text_response("Nobody has the joint right now. Spark one with !spark")
 
     if silent:
-        return {"message": ""}  # silent mode, only show timeouts
+        return text_response("")  # silent mode, only show timeouts
 
     minutes_ago = int((datetime.utcnow() - last_pass_time).total_seconds() // 60)
-    return {"message": f"The joint is currently with {joint_holder} (passed {minutes_ago} min ago)."}
+    return text_response(f"The joint is currently with {joint_holder} (passed {minutes_ago} min ago).")
