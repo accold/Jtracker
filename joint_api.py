@@ -90,11 +90,12 @@ def pass_joint(from_user: str = Query(...), to_user: str = Query(...)):
 
     # Check 10-pass limit
     if pass_count >= 10:
+        # Last user gets the final puff
+        last_user = joint_holder
         joint_holder = None
         last_pass_time = None
         pass_count = 0
-        return text_response(f"{from_user} passed the joint to {to_user}\n"
-                             f"The joint burned out after 10 passes 🔥💨")
+        return text_response(f"{last_user} takes a couple last puffs and puts the roach in the ashtray 🔥💨")
 
     return text_response(f"{from_user} passed the joint to {to_user}")
 
@@ -102,17 +103,21 @@ def pass_joint(from_user: str = Query(...), to_user: str = Query(...)):
 
 @app.get("/status")
 def status(silent: bool = False):
+    """
+    Show joint status.
+    If silent=True (for timers), only report burnouts, not "nobody has it".
+    """
     expired = check_timeout()
     if expired:
         return text_response(expired)
 
     if not joint_holder:
-        return text_response("Nobody has the joint right now. Spark one with !spark")
+        if silent:
+            return text_response("")  # timer check → stay silent
+        return text_response("Nobody has the joint right now. Spark one with !spark ")
 
     if silent:
-        # Timer check → stay quiet unless burned out
-        return text_response("")
+        return text_response("")  # timer check → stay silent
 
-    return text_response(f"The joint is currently with {joint_holder} (passed {minutes_ago(last_pass_time)}).")
-
-
+    minutes_text = minutes_ago(last_pass_time)
+    return text_response(f"The joint is currently with {joint_holder} (passed {minutes_text}).")
