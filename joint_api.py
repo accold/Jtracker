@@ -1,3 +1,4 @@
+pass_count: int = 0  # tracks how many times joint has been passed
 from fastapi import FastAPI, Query
 from fastapi.responses import PlainTextResponse
 from datetime import datetime, timedelta
@@ -63,7 +64,7 @@ def spark(user: str = Query(...)):
 
 @app.get("/pass")
 def pass_joint(from_user: str = Query(...), to_user: str = Query(...)):
-    global joint_holder, last_pass_time
+    global joint_holder, last_pass_time, pass_count
     from_user = clean_user(from_user)
     to_user = clean_user(to_user)
 
@@ -74,16 +75,27 @@ def pass_joint(from_user: str = Query(...), to_user: str = Query(...)):
     if joint_holder != from_user:
         return text_response(f"{from_user} can’t pass the joint because they don’t have it 👀")
 
-    # If passing to Nightbot → Nightbot smokes the whole joint
+    # If passing to Nightbot → Nightbot smokes it
     if to_user.lower() == "nightbot":
         joint_holder = None
         last_pass_time = None
+        pass_count = 0
         return text_response(f"{from_user} passed the joint to Nightbot 🤖\n"
                              f"Nightbot puff puff... smoked the whole joint 🔥💨")
 
     # Normal pass
     joint_holder = to_user
     last_pass_time = datetime.utcnow()
+    pass_count += 1
+
+    # Check 10-pass limit
+    if pass_count >= 10:
+        joint_holder = None
+        last_pass_time = None
+        pass_count = 0
+        return text_response(f"{from_user} passed the joint to {to_user}\n"
+                             f"The joint burned out after 10 passes 🔥💨")
+
     return text_response(f"{from_user} passed the joint to {to_user}")
 
 
@@ -102,4 +114,5 @@ def status(silent: bool = False):
         return text_response("")
 
     return text_response(f"The joint is currently with {joint_holder} (passed {minutes_ago(last_pass_time)}).")
+
 
