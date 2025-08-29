@@ -138,9 +138,9 @@ def pass_joint(
         joint["passes"] = 0
         joint["last_pass_time"] = None
 
-        ch["stats"]["total_joints"] += 1  # counts as smoked joint
-
+        ch["stats"]["total_joints"] += 1  # increment total smoked
         save_data()
+
         return text_response(f"{from_user} passed the joint to Nightbot 🤖\n"
                              f"Nightbot puff puff... smoked the whole joint, sorry 🔥💨")
 
@@ -159,9 +159,9 @@ def pass_joint(
         joint["passes"] = 0
         joint["last_pass_time"] = None
 
-        ch["stats"]["total_joints"] += 1  # counts as smoked joint
-
+        ch["stats"]["total_joints"] += 1  # increment total smoked
         save_data()
+
         return text_response(f"{last_user} takes a couple last puffs and puts the roach in the ashtray 🔥💨")
 
     save_data()
