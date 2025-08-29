@@ -144,6 +144,10 @@ def pass_joint(
 
     # Nightbot smokes the joint
     if to_user.lower() == "nightbot":
+        # Increment user's passes
+        u = get_user(ch, from_user)
+        u["passes"] += 1
+
         joint["holder"] = None
         joint["burned"] = True
         joint["passes"] = 0
