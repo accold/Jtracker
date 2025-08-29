@@ -103,7 +103,7 @@ def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_le
     joint["burned"] = False
     joint["last_pass_time"] = datetime.utcnow().isoformat()
 
-    ch["stats"]["total_joints"] += 1  # count new spark as smoked joint
+    # Track user spark count
     u = get_user(ch, user)
     u["sparks"] += 1
 
@@ -138,7 +138,7 @@ def pass_joint(
         joint["passes"] = 0
         joint["last_pass_time"] = None
 
-        ch["stats"]["total_joints"] += 1  # count as smoked joint
+        ch["stats"]["total_joints"] += 1  # counts as smoked joint
 
         save_data()
         return text_response(f"{from_user} passed the joint to Nightbot 🤖\n"
@@ -159,7 +159,7 @@ def pass_joint(
         joint["passes"] = 0
         joint["last_pass_time"] = None
 
-        ch["stats"]["total_joints"] += 1  # count as smoked joint
+        ch["stats"]["total_joints"] += 1  # counts as smoked joint
 
         save_data()
         return text_response(f"{last_user} takes a couple last puffs and puts the roach in the ashtray 🔥💨")
