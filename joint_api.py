@@ -183,9 +183,10 @@ def stats(channel: str = Query(...), user: str = Query(None)):
         u = get_user(ch, clean_user(user))
         return text_response(f"{user}'s stats → Sparks: {u['sparks']}, Passes: {u['passes']}")
     else:
-        return text_response(f"Total joints smoked in {channel}: {ch['stats']['total_joints']}")
+        return text_response(f"Total joints smoked in {channel}'s stream: {ch['stats']['total_joints']}")
 
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=10000)
+
