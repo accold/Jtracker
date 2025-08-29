@@ -148,13 +148,16 @@ def pass_joint(
         u = get_user(ch, from_user)
         u["passes"] += 1
 
+        # Increment total joints
+        increment_total_joints(channel)
+
+        # Reset joint
         joint["holder"] = None
         joint["burned"] = True
         joint["passes"] = 0
         joint["last_pass_time"] = None
 
-        increment_total_joints(channel)
-
+        save_data()
         return text_response(f"{from_user} passed the joint to Nightbot 🤖\n"
                              f"Nightbot puff puff... smoked the whole joint, sorry 🔥💨")
 
@@ -168,13 +171,17 @@ def pass_joint(
     # 10-pass burnout
     if joint["passes"] >= 10:
         last_user = to_user
+
+        # Increment total joints after last user finishes
+        increment_total_joints(channel)
+
+        # Reset joint
         joint["holder"] = None
         joint["burned"] = True
         joint["passes"] = 0
         joint["last_pass_time"] = None
 
-        increment_total_joints(channel)
-
+        save_data()
         return text_response(f"{last_user} takes a couple last puffs and puts the roach in the ashtray 🔥💨")
 
     save_data()
