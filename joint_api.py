@@ -23,6 +23,7 @@ def save_data():
 
 
 def get_channel(channel: str):
+    channel = channel.lower()
     if channel not in data["channels"]:
         data["channels"][channel] = {
             "joint": {"holder": None, "passes": 0, "burned": True, "last_pass_time": None},
@@ -32,6 +33,7 @@ def get_channel(channel: str):
 
 
 def get_user(channel_data, user: str):
+    user = user.lower()
     if user not in channel_data["stats"]["users"]:
         channel_data["stats"]["users"][user] = {"sparks": 0, "passes": 0, "burned_out": 0}
     return channel_data["stats"]["users"][user]
@@ -54,14 +56,24 @@ def minutes_ago(ts: datetime) -> str:
     return f"{mins} minutes ago"
 
 
+# ---------- Total joints increment helper ----------
+def increment_total_joints(channel: str):
+    ch = get_channel(channel)
+    if "stats" not in ch:
+        ch["stats"] = {"total_joints": 0, "users": {}}
+    if "total_joints" not in ch["stats"]:
+        ch["stats"]["total_joints"] = 0
+    ch["stats"]["total_joints"] += 1
+    save_data()
+
+
 # ---------- Timeout ----------
-def check_timeout(ch):
+def check_timeout(ch, channel_name):
     joint = ch["joint"]
     if joint["holder"] and not joint["burned"] and joint["last_pass_time"]:
         last_pass_time = datetime.fromisoformat(joint["last_pass_time"])
         if datetime.utcnow() - last_pass_time > timedelta(minutes=timeout_minutes):
             expired_user = joint["holder"]
-            # Track burned out stat for user
             u = get_user(ch, expired_user)
             u["burned_out"] += 1
 
@@ -83,11 +95,10 @@ def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_le
     ch = get_channel(channel)
     joint = ch["joint"]
 
-    expired = check_timeout(ch)
+    expired = check_timeout(ch, channel)
     if expired:
         return text_response(expired)
 
-    # Reset joint if burned or no holder
     if joint["burned"] or joint["holder"] is None:
         joint["holder"] = None
         joint["passes"] = 0
@@ -124,7 +135,7 @@ def pass_joint(
     ch = get_channel(channel)
     joint = ch["joint"]
 
-    expired = check_timeout(ch)
+    expired = check_timeout(ch, channel)
     if expired:
         return text_response(expired)
 
@@ -138,8 +149,7 @@ def pass_joint(
         joint["passes"] = 0
         joint["last_pass_time"] = None
 
-        ch["stats"]["total_joints"] += 1  # increment total smoked
-        save_data()
+        increment_total_joints(channel)
 
         return text_response(f"{from_user} passed the joint to Nightbot 🤖\n"
                              f"Nightbot puff puff... smoked the whole joint, sorry 🔥💨")
@@ -159,8 +169,7 @@ def pass_joint(
         joint["passes"] = 0
         joint["last_pass_time"] = None
 
-        ch["stats"]["total_joints"] += 1  # increment total smoked
-        save_data()
+        increment_total_joints(channel)
 
         return text_response(f"{last_user} takes a couple last puffs and puts the roach in the ashtray 🔥💨")
 
@@ -175,7 +184,7 @@ def status(channel: str = Query(..., min_length=1), silent: bool = False):
     ch = get_channel(channel)
     joint = ch["joint"]
 
-    expired = check_timeout(ch)
+    expired = check_timeout(ch, channel)
     if expired:
         return text_response(expired)
 
