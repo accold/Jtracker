@@ -33,12 +33,11 @@ def get_channel(channel: str):
 
 def get_user(channel_data, user: str):
     if user not in channel_data["stats"]["users"]:
-        channel_data["stats"]["users"][user] = {"sparks": 0, "passes": 0}
+        channel_data["stats"]["users"][user] = {"sparks": 0, "passes": 0, "burned_out": 0}
     return channel_data["stats"]["users"][user]
 
 
 def clean_user(name: str) -> str:
-    """Strip leading @ and whitespace"""
     return name.lstrip("@").strip() if name else "UnknownUser"
 
 
@@ -62,10 +61,15 @@ def check_timeout(ch):
         last_pass_time = datetime.fromisoformat(joint["last_pass_time"])
         if datetime.utcnow() - last_pass_time > timedelta(minutes=timeout_minutes):
             expired_user = joint["holder"]
+            # Track burned out stat for user
+            u = get_user(ch, expired_user)
+            u["burned_out"] += 1
+
             joint["holder"] = None
             joint["burned"] = True
             joint["passes"] = 0
             joint["last_pass_time"] = None
+
             save_data()
             return f"{expired_user} held the joint too long and it burned out 🔥"
     return None
@@ -99,7 +103,7 @@ def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_le
     joint["burned"] = False
     joint["last_pass_time"] = datetime.utcnow().isoformat()
 
-    ch["stats"]["total_joints"] += 1
+    ch["stats"]["total_joints"] += 1  # count new spark as smoked joint
     u = get_user(ch, user)
     u["sparks"] += 1
 
@@ -133,6 +137,9 @@ def pass_joint(
         joint["burned"] = True
         joint["passes"] = 0
         joint["last_pass_time"] = None
+
+        ch["stats"]["total_joints"] += 1  # count as smoked joint
+
         save_data()
         return text_response(f"{from_user} passed the joint to Nightbot 🤖\n"
                              f"Nightbot puff puff... smoked the whole joint, sorry 🔥💨")
@@ -151,6 +158,9 @@ def pass_joint(
         joint["burned"] = True
         joint["passes"] = 0
         joint["last_pass_time"] = None
+
+        ch["stats"]["total_joints"] += 1  # count as smoked joint
+
         save_data()
         return text_response(f"{last_user} takes a couple last puffs and puts the roach in the ashtray 🔥💨")
 
@@ -189,7 +199,7 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
     ch = get_channel(channel)
     if user:
         u = get_user(ch, clean_user(user))
-        return text_response(f"{user}'s stats → Sparks: {u['sparks']}, Passes: {u['passes']}")
+        return text_response(f"{user}'s stats → Sparks: {u['sparks']}, Passes: {u['passes']}, Let it burn out: {u['burned_out']}")
     else:
         return text_response(f"{channel}'s Channel → Total joints smoked: {ch['stats']['total_joints']}")
 
