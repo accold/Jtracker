@@ -27,7 +27,7 @@ What it does: Shows who currently has the joint and how long ago it was passed.
 4  !jstats
 
 Message:
-$(urlfetch https://jtracker-50wk.onrender.com/stats?channel=$(touser $(channel)))
+$(urlfetch https://jtracker-50wk.onrender.com/stats?channel=$(channel))
 
 what it does: shows total smoked joints in channel
 
