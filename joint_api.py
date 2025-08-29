@@ -38,7 +38,8 @@ def get_user(channel_data, user: str):
 
 
 def clean_user(name: str) -> str:
-    return name.lstrip("@") if name else name
+    """Strip leading @ and whitespace"""
+    return name.lstrip("@").strip() if name else "UnknownUser"
 
 
 def text_response(message: str):
@@ -70,10 +71,11 @@ def check_timeout(ch):
     return None
 
 
-# ---------- Routes ----------
+# ---------- Spark Endpoint ----------
 @app.get("/spark")
-def spark(user: str = Query(...), channel: str = Query(...)):
+def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_length=1)):
     user = clean_user(user)
+    channel = clean_user(channel)
     ch = get_channel(channel)
     joint = ch["joint"]
 
@@ -81,8 +83,14 @@ def spark(user: str = Query(...), channel: str = Query(...)):
     if expired:
         return text_response(expired)
 
-    # Allow spark if joint is burned or no holder
-    if joint["holder"] and not joint["burned"]:
+    # Reset joint if burned or no holder
+    if joint["burned"] or joint["holder"] is None:
+        joint["holder"] = None
+        joint["passes"] = 0
+        joint["last_pass_time"] = None
+        joint["burned"] = False
+
+    if joint["holder"] is not None:
         return text_response(f"{user} tried to spark a joint, but {joint['holder']} is already holding one")
 
     # Start new joint
@@ -99,10 +107,16 @@ def spark(user: str = Query(...), channel: str = Query(...)):
     return text_response(f"{user} sparked a joint💨")
 
 
+# ---------- Pass Endpoint ----------
 @app.get("/pass")
-def pass_joint(from_user: str = Query(...), to_user: str = Query(...), channel: str = Query(...)):
+def pass_joint(
+    from_user: str = Query(..., min_length=1),
+    to_user: str = Query(..., min_length=1),
+    channel: str = Query(..., min_length=1)
+):
     from_user = clean_user(from_user)
     to_user = clean_user(to_user)
+    channel = clean_user(channel)
     ch = get_channel(channel)
     joint = ch["joint"]
 
@@ -113,7 +127,7 @@ def pass_joint(from_user: str = Query(...), to_user: str = Query(...), channel: 
     if joint["holder"] != from_user:
         return text_response(f"{from_user} can’t pass the joint because they don’t have it 👀")
 
-    # Nightbot smokes
+    # Nightbot smokes the joint
     if to_user.lower() == "nightbot":
         joint["holder"] = None
         joint["burned"] = True
@@ -121,14 +135,16 @@ def pass_joint(from_user: str = Query(...), to_user: str = Query(...), channel: 
         joint["last_pass_time"] = None
         save_data()
         return text_response(f"{from_user} passed the joint to Nightbot 🤖\n"
-                             f"Nightbot puff puff... smoked the whole joint, sorry :P 🔥💨")
+                             f"Nightbot puff puff... smoked the whole joint, sorry 🔥💨")
 
+    # Normal pass
     joint["holder"] = to_user
     joint["passes"] += 1
     joint["last_pass_time"] = datetime.utcnow().isoformat()
     u = get_user(ch, from_user)
     u["passes"] += 1
 
+    # 10-pass burnout
     if joint["passes"] >= 10:
         last_user = to_user
         joint["holder"] = None
@@ -142,8 +158,10 @@ def pass_joint(from_user: str = Query(...), to_user: str = Query(...), channel: 
     return text_response(f"{from_user} passed the joint to {to_user}")
 
 
+# ---------- Status Endpoint ----------
 @app.get("/status")
-def status(channel: str = Query(...), silent: bool = False):
+def status(channel: str = Query(..., min_length=1), silent: bool = False):
+    channel = clean_user(channel)
     ch = get_channel(channel)
     joint = ch["joint"]
 
@@ -164,14 +182,15 @@ def status(channel: str = Query(...), silent: bool = False):
     return text_response(f"The joint is currently with {joint['holder']} (passed {minutes_text}).")
 
 
+# ---------- Stats Endpoint ----------
 @app.get("/stats")
-def stats(channel: str = Query(...), user: str = Query(None)):
+def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
+    channel = clean_user(channel)
     ch = get_channel(channel)
     if user:
         u = get_user(ch, clean_user(user))
         return text_response(f"{user}'s stats → Sparks: {u['sparks']}, Passes: {u['passes']}")
     else:
-        # Use proper grammar for channel stats
         return text_response(f"{channel}'s Channel → Total joints smoked: {ch['stats']['total_joints']}")
 
 
