@@ -1,34 +1,58 @@
-This api works with nightbot, you will need to add these 3 commands and 1 timer. Nothing else is required. if its the 1st time running the command for the stream duration the server may need to wake up(free service) if it doesnt respond try again in a few seconds
+This api works with nightbot, you will need to add these 5 commands and 1 timer. Nothing else is required. if its the 1st time running the command for the stream duration the server may need to wake up(free service) if it doesnt respond try again in a few seconds
 
-1️⃣ !spark
+1️ !spark
 Message:
-$(urlfetch https://jtracker-50wk.onrender.com/spark?user=$(user))
+$(urlfetch https://jtracker-50wk.onrender.com/spark?user=$(user)&channel=$(channel))
 
 What it does: Sparks a joint for the user who typed it.
 
 
-2️⃣ !passj
+2️ !passj
 
 Message:
-$(urlfetch https://jtracker-50wk.onrender.com/pass?from_user=$(user)&to_user=$(query))
+$(urlfetch https://jtracker-50wk.onrender.com/pass?from_user=$(user)&to_user=$(query)&channel=$(channel))
 
 What it does: Passes the joint from the user who typed the command to the target user they specify (typed after !passj).
 
 
-3️⃣ !jointstatus
+3️ !jointstatus
 
 Message:
-$(urlfetch https://jtracker-50wk.onrender.com/status)
+$(urlfetch https://jtracker-50wk.onrender.com/status?channel=$(channel))
 
 What it does: Shows who currently has the joint and how long ago it was passed.
 
 
-4️⃣ Nightbot Timer
+
+4  !jstats
+
+Message:
+$(urlfetch https://jtracker-50wk.onrender.com/stats?channel=$(touser $(channel)))
+
+what it does: shows total smoked joints in channel
+
+
+
+5  !pjstats
+
+message:
+$(urlfetch https://jtracker-50wk.onrender.com/stats?channel=$(channel)&user=$(user))
+
+what it does: shows spark/pass/let it burn data for user who ran command
+
+
+
+
+6   Nightbot Timer
+Message: 
+$(urlfetch https://jtracker-50wk.onrender.com/status?channel=$(channel)&silent=True)
 
 Purpose: Automatically checks the joint for burnout (5-minute timeout).
 
-Message:
-$(urlfetch https://jtracker-50wk.onrender.com/status?silent=true)
+
 
 Interval: 5 minutes
 Minimum chat lines: 2 (so it only triggers when chat is active)
+
+
+
