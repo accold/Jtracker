@@ -239,17 +239,14 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
 
         # Sort by burned_out descending, then name
         burned_list.sort(key=lambda x: (-x[1], x[0]))
-
-        # Keep only top 10
         top10 = burned_list[:10]
 
-        # Format the Doink Dropouts list
         if top10:
             dropout_lines = " | ".join([f"{name}: {count}" for name, count in top10])
-            dropouts_text = f"\nDoink Dropouts → {dropout_lines}"
+            dropouts_text = f"Doink Dropouts → {dropout_lines}"
         else:
-            dropouts_text = "\nDoink Dropouts → None yet, impressive. 👍"
+            dropouts_text = "Doink Dropouts → None yet, impressive. 👍"
 
         return text_response(
-            f"{channel}'s Channel → Total joints smoked: {total_joints}{dropouts_text}"
+            f"{channel}'s Channel → Total joints smoked: {total_joints} | {dropouts_text}"
         )
