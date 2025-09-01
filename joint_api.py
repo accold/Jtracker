@@ -27,8 +27,12 @@ def get_channel(channel: str):
     if channel not in data["channels"]:
         data["channels"][channel] = {
             "joint": {"holder": None, "passes": 0, "burned": True, "last_pass_time": None},
-            "stats": {"total_joints": 0, "users": {}}
+            "stats": {"total_joints": 0, "nightbot_joints": 0, "users": {}}
         }
+    else:
+        # Ensure new field exists for old data
+        if "nightbot_joints" not in data["channels"][channel]["stats"]:
+            data["channels"][channel]["stats"]["nightbot_joints"] = 0
     return data["channels"][channel]
 
 
@@ -42,7 +46,6 @@ def get_user(channel_data, user: str):
 def clean_user(name: str) -> str:
     if not name:
         return "UnknownUser"
-    # Only keep the first word, strip leading "@"
     return name.split()[0].lstrip("@").strip()
 
 
@@ -63,7 +66,7 @@ def minutes_ago(ts: datetime) -> str:
 def increment_total_joints(channel: str):
     ch = get_channel(channel)
     if "stats" not in ch:
-        ch["stats"] = {"total_joints": 0, "users": {}}
+        ch["stats"] = {"total_joints": 0, "nightbot_joints": 0, "users": {}}
     if "total_joints" not in ch["stats"]:
         ch["stats"]["total_joints"] = 0
     ch["stats"]["total_joints"] += 1
@@ -111,13 +114,11 @@ def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_le
     if joint["holder"] is not None:
         return text_response(f"{user} tried to spark a joint, but {joint['holder']} is already holding one")
 
-    # Start new joint
     joint["holder"] = user
     joint["passes"] = 0
     joint["burned"] = False
     joint["last_pass_time"] = datetime.utcnow().isoformat()
 
-    # Track user spark count
     u = get_user(ch, user)
     u["sparks"] += 1
 
@@ -147,12 +148,11 @@ def pass_joint(
 
     # Nightbot smokes the joint
     if to_user.lower() == "nightbot":
-        # Increment user's passes
         u = get_user(ch, from_user)
         u["passes"] += 1
 
-        # Increment total joints
-        increment_total_joints(channel)
+        # Increment Nightbot-only counter
+        ch["stats"]["nightbot_joints"] += 1
 
         # Reset joint
         joint["holder"] = None
@@ -171,14 +171,10 @@ def pass_joint(
     u = get_user(ch, from_user)
     u["passes"] += 1
 
-    # 10-pass burnout
     if joint["passes"] >= 10:
         last_user = to_user
-
-        # Increment total joints after last user finishes
         increment_total_joints(channel)
 
-        # Reset joint
         joint["holder"] = None
         joint["burned"] = True
         joint["passes"] = 0
@@ -229,15 +225,13 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
         )
     else:
         total_joints = ch['stats']['total_joints']
+        nightbot_joints = ch['stats'].get('nightbot_joints', 0)
 
-        # Gather burned_out stats
         burned_list = [
             (uname, u['burned_out'])
             for uname, u in ch['stats']['users'].items()
             if u['burned_out'] > 0
         ]
-
-        # Sort by burned_out descending, then name
         burned_list.sort(key=lambda x: (-x[1], x[0]))
         top10 = burned_list[:10]
 
@@ -248,5 +242,6 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
             dropouts_text = "Doink Dropouts → None yet, impressive. 👍"
 
         return text_response(
-            f"{channel}'s Channel → Total joints smoked: {total_joints} | {dropouts_text}"
+            f"{channel}'s Channel → Total joints smoked: {total_joints} | "
+            f"Nightbot smoked: {nightbot_joints} | {dropouts_text}"
         )
