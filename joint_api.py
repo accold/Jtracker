@@ -40,7 +40,10 @@ def get_user(channel_data, user: str):
 
 
 def clean_user(name: str) -> str:
-    return name.lstrip("@").strip() if name else "UnknownUser"
+    if not name:
+        return "UnknownUser"
+    # Only keep the first word, strip leading "@"
+    return name.split()[0].lstrip("@").strip()
 
 
 def text_response(message: str):
@@ -227,3 +230,4 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=10000)
+
