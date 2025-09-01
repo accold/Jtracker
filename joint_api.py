@@ -220,14 +220,36 @@ def status(channel: str = Query(..., min_length=1), silent: bool = False):
 def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
     channel = clean_user(channel)
     ch = get_channel(channel)
+
     if user:
         u = get_user(ch, clean_user(user))
-        return text_response(f"{user}'s stats → Sparks: {u['sparks']}, Passes: {u['passes']}, Let it burn out: {u['burned_out']}")
+        return text_response(
+            f"{user}'s stats → Sparks: {u['sparks']}, Passes: {u['passes']}, "
+            f"Let it burn out: {u['burned_out']}"
+        )
     else:
-        return text_response(f"{channel}'s Channel → Total joints smoked: {ch['stats']['total_joints']}")
+        total_joints = ch['stats']['total_joints']
 
+        # Gather burned_out stats
+        burned_list = [
+            (uname, u['burned_out'])
+            for uname, u in ch['stats']['users'].items()
+            if u['burned_out'] > 0
+        ]
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=10000)
+        # Sort by burned_out descending, then name
+        burned_list.sort(key=lambda x: (-x[1], x[0]))
 
+        # Keep only top 10
+        top10 = burned_list[:10]
+
+        # Format the Doink Dropouts list
+        if top10:
+            dropout_lines = " | ".join([f"{name}: {count}" for name, count in top10])
+            dropouts_text = f"\nDoink Dropouts → {dropout_lines}"
+        else:
+            dropouts_text = "\nDoink Dropouts → None yet, impressive. 👍"
+
+        return text_response(
+            f"{channel}'s Channel → Total joints smoked: {total_joints}{dropouts_text}"
+        )
