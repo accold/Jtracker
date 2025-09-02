@@ -5,7 +5,7 @@ import json
 import os
 import random
 from difflib import SequenceMatcher
-from urllib.request import urlopen
+import urllib.request
 
 app = FastAPI()
 
@@ -66,7 +66,11 @@ def minutes_ago(ts: datetime) -> str:
 
 def increment_total_joints(channel: str):
     ch = get_channel(channel)
-    ch["stats"]["total_joints"] = ch["stats"].get("total_joints", 0) + 1
+    if "stats" not in ch:
+        ch["stats"] = {"total_joints": 0, "nightbot_joints": 0, "users": {}}
+    if "total_joints" not in ch["stats"]:
+        ch["stats"]["total_joints"] = 0
+    ch["stats"]["total_joints"] += 1
     save_data()
 
 def check_timeout(ch, channel_name):
@@ -77,12 +81,10 @@ def check_timeout(ch, channel_name):
             expired_user = joint["holder"]
             u = get_user(ch, expired_user)
             u["burned_out"] += 1
-
             joint["holder"] = None
             joint["burned"] = True
             joint["passes"] = 0
             joint["last_pass_time"] = None
-
             save_data()
             return f"{expired_user} held the joint too long and it burned out 🔥"
     return None
@@ -90,28 +92,29 @@ def check_timeout(ch, channel_name):
 def similar(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
-# ---------- Twitch User Population ----------
-def populate_users_from_twitch(channel):
+# ---------- Populate user list from Twitch ----------
+def populate_users_from_twitch(channel: str):
+    ch = get_channel(channel)
     try:
         url = f"https://tmi.twitch.tv/group/user/{channel}/chatters"
-        with urlopen(url) as resp:
-            data_resp = json.load(resp)
-            ch = get_channel(channel)
-            for role in data_resp.get("chatters", {}):
-                for user in data_resp["chatters"][role]:
-                    get_user(ch, user)
-    except Exception as e:
-        print("Twitch population failed:", e)
+        with urllib.request.urlopen(url, timeout=3) as resp:
+            data_json = json.load(resp)
+            chatters = data_json.get("chatters", {})
+            for category in ["broadcaster","vips","moderators","viewers","staff","admins","global_mods"]:
+                for uname in chatters.get(category, []):
+                    get_user(ch, uname)
+        save_data()
+    except Exception:
+        pass  # silently fail if Twitch API is unreachable
 
 # ---------- Spark Endpoint ----------
 @app.get("/spark")
 def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_length=1)):
     user = clean_user(user)
     channel = clean_user(channel)
+    populate_users_from_twitch(channel)
     ch = get_channel(channel)
     joint = ch["joint"]
-
-    populate_users_from_twitch(channel)
 
     expired = check_timeout(ch, channel)
     if expired:
@@ -130,36 +133,31 @@ def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_le
     joint["passes"] = 0
     joint["burned"] = False
     joint["last_pass_time"] = datetime.utcnow().isoformat()
-
     u = get_user(ch, user)
     u["sparks"] += 1
-
     save_data()
     return text_response(f"{user} sparked a joint💨")
 
 # ---------- Pass Endpoint ----------
 @app.get("/pass")
-def pass_joint(from_user: str = Query(..., min_length=1),
-               to_user: str = Query(..., min_length=1),
-               channel: str = Query(..., min_length=1)):
+def pass_joint(from_user: str = Query(..., min_length=1), to_user: str = Query(..., min_length=1), channel: str = Query(..., min_length=1)):
     from_user_clean = clean_user(from_user)
     to_user_clean = clean_user(to_user)
     channel_clean = clean_user(channel)
+    populate_users_from_twitch(channel_clean)
     ch = get_channel(channel_clean)
     joint = ch["joint"]
-
-    populate_users_from_twitch(channel_clean)
 
     expired = check_timeout(ch, channel_clean)
     if expired:
         return text_response(expired)
 
-    if joint["holder"] != from_user_clean:
+    if not joint["holder"] or joint["holder"].lower() != from_user_clean.lower():
         return text_response(f"{from_user_clean} can’t pass the joint because they don’t have it 👀")
 
     u = get_user(ch, from_user_clean)
 
-    # Fuzzy username resolution
+    # ---------- Fuzzy Username Resolution ----------
     all_usernames = [info["original_name"] for uname, info in ch["stats"]["users"].items()]
     if to_user_clean.lower() != "nightbot":
         best_match = to_user_clean
@@ -172,22 +170,19 @@ def pass_joint(from_user: str = Query(..., min_length=1),
         if best_ratio >= 0.7:
             to_user_clean = best_match
 
-    # Fumble pass (5%)
-    if random.random() < 0.05:
-        other_users = [info["original_name"] for uname, info in ch["stats"]["users"].items()
-                       if uname.lower() != from_user_clean.lower()]
+    # ---------- Fumble Pass ----------
+    if random.random() < 0.025:
+        other_users = [info["original_name"] for uname, info in ch["stats"]["users"].items() if uname.lower() != from_user_clean.lower()]
         stepped_user = random.choice(other_users) if other_users else "someone unlucky"
-
         joint["holder"] = None
         joint["burned"] = True
         joint["passes"] = 0
         joint["last_pass_time"] = None
-
         u["burned_out"] += 1
         save_data()
         return text_response(f"Oh no! {from_user_clean} fumbled the joint and {stepped_user} accidentally stepped on it 🔥💀")
 
-    # Portal mishap (5%)
+    # ---------- Portal Mishap ----------
     if random.random() < 0.05:
         joint["holder"] = from_user_clean
         joint["last_pass_time"] = datetime.utcnow().isoformat()
@@ -195,21 +190,18 @@ def pass_joint(from_user: str = Query(..., min_length=1),
         save_data()
         return text_response(f"A portal opens! The joint comes back to {from_user_clean} 😵‍💫💨")
 
-    # Nightbot handling
+    # ---------- Nightbot Handling ----------
     if to_user_clean.lower() == "nightbot":
         u["passes"] += 1
         ch["stats"]["nightbot_joints"] += 1
-
         joint["holder"] = None
         joint["burned"] = True
         joint["passes"] = 0
         joint["last_pass_time"] = None
-
         save_data()
-        return text_response(f"{from_user_clean} passed the joint to Nightbot 🤖\n"
-                             f"Nightbot puff puff... smoked the whole joint, sorry 🔥💨")
+        return text_response(f"{from_user_clean} passed the joint to Nightbot 🤖\nNightbot puff puff... smoked the whole joint, sorry 🔥💨")
 
-    # Normal pass
+    # ---------- Normal Pass ----------
     joint["holder"] = to_user_clean
     joint["passes"] += 1
     joint["last_pass_time"] = datetime.utcnow().isoformat()
@@ -218,12 +210,10 @@ def pass_joint(from_user: str = Query(..., min_length=1),
     if joint["passes"] >= 10:
         last_user = to_user_clean
         increment_total_joints(channel_clean)
-
         joint["holder"] = None
         joint["burned"] = True
         joint["passes"] = 0
         joint["last_pass_time"] = None
-
         save_data()
         return text_response(f"{last_user} takes a couple last puffs and puts the roach in the ashtray 🔥💨")
 
@@ -241,7 +231,6 @@ def status(channel: str = Query(..., min_length=1), silent: bool = False):
     if expired:
         return text_response(expired)
 
-    # Silent mode only responds if joint burned
     if joint["burned"] or not joint["holder"]:
         if silent:
             return text_response("")
@@ -262,30 +251,16 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
 
     if user:
         u = get_user(ch, clean_user(user))
-        return text_response(
-            f"{user}'s stats → Sparks: {u['sparks']}, Passes: {u['passes']}, "
-            f"Let it burn out: {u['burned_out']}"
-        )
+        return text_response(f"{user}'s stats → Sparks: {u['sparks']}, Passes: {u['passes']}, Let it burn out: {u['burned_out']}")
     else:
         total_joints = ch['stats']['total_joints']
         nightbot_joints = ch['stats'].get('nightbot_joints', 0)
-
-        burned_list = [
-            (info["original_name"], u['burned_out'])
-            for uname, u in ch["stats"]["users"].items()
-            if u['burned_out'] > 0
-            for info in [u]
-        ]
+        burned_list = [(info["original_name"], u['burned_out']) for uname, u in ch["stats"]["users"].items() if u['burned_out'] > 0 for info in [u]]
         burned_list.sort(key=lambda x: (-x[1], x[0]))
         top10 = burned_list[:10]
-
         if top10:
             dropout_lines = " | ".join([f"{name}: {count}" for name, count in top10])
             dropouts_text = f"Doink Dropouts → {dropout_lines}"
         else:
             dropouts_text = "Doink Dropouts → None yet, impressive. 👍"
-
-        return text_response(
-            f"{channel_clean}'s Channel → Total joints smoked: {total_joints} | "
-            f"Nightbot smoked: {nightbot_joints} | {dropouts_text}"
-        )
+        return text_response(f"{channel_clean}'s Channel → Total joints smoked: {total_joints} | Nightbot smoked: {nightbot_joints} | {dropouts_text}")
