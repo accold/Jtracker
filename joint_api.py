@@ -209,7 +209,7 @@ def pass_joint(
         return text_response(f"{last_user} takes a couple last puffs and puts the roach in the ashtray 🔥💨")
 
     save_data()
-    return text_response(f"{from_user} passed the joint to {to_user}")
+    return text_response(f"{from_user} passed the joint to {to_user}💨")
 
 
 # ---------- Status Endpoint ----------
@@ -271,4 +271,5 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
             f"{channel_clean}'s Channel → Total joints smoked: {total_joints} | "
             f"Nightbot smoked: {nightbot_joints} | {dropouts_text}"
         )
+
 
