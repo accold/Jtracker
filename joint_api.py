@@ -171,7 +171,7 @@ def pass_joint(from_user: str = Query(..., min_length=1), to_user: str = Query(.
             to_user_clean = best_match
 
     # ---------- Fumble Pass ----------
-    if random.random() < 0.025:
+    if random.random() < 0.02:
         other_users = [info["original_name"] for uname, info in ch["stats"]["users"].items() if uname.lower() != from_user_clean.lower()]
         stepped_user = random.choice(other_users) if other_users else "someone unlucky"
         joint["holder"] = None
@@ -264,3 +264,4 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
         else:
             dropouts_text = "Doink Dropouts → None yet, impressive. 👍"
         return text_response(f"{channel_clean}'s Channel → Total joints smoked: {total_joints} | Nightbot smoked: {nightbot_joints} | {dropouts_text}")
+
