@@ -150,7 +150,7 @@ def pass_joint(
     u = get_user(ch, from_user)
 
     # 5% chance to fumble
-    if random.random() < 0.05:
+    if random.random() < 1.00:
         other_users = [uname for uname in ch["stats"]["users"] if uname != from_user]
         if other_users:
             stepped_user = random.choice(other_users)
@@ -263,3 +263,4 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
             f"{channel}'s Channel → Total joints smoked: {total_joints} | "
             f"Nightbot smoked: {nightbot_joints} | {dropouts_text}"
         )
+
