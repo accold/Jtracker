@@ -169,7 +169,7 @@ def pass_joint(
         return text_response(f"Oh no! {from_user} fumbled the joint and {stepped_user} accidentally stepped on it 🔥💀")
 
     # ---------- Portal Mishap ----------
-    if random.random() < 1.00:
+    if random.random() < 0.05:
         joint["holder"] = from_user_clean
         joint["last_pass_time"] = datetime.utcnow().isoformat()
         u["passes"] += 1
@@ -271,3 +271,4 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
             f"{channel_clean}'s Channel → Total joints smoked: {total_joints} | "
             f"Nightbot smoked: {nightbot_joints} | {dropouts_text}"
         )
+
