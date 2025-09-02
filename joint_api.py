@@ -38,10 +38,13 @@ def get_channel(channel: str):
 
 
 def get_user(channel_data, user: str):
-    user = user.lower()
-    if user not in channel_data["stats"]["users"]:
-        channel_data["stats"]["users"][user] = {"sparks": 0, "passes": 0, "burned_out": 0}
-    return channel_data["stats"]["users"][user]
+    user_lower = user.lower()
+    if user_lower not in channel_data["stats"]["users"]:
+        channel_data["stats"]["users"][user_lower] = {"sparks": 0, "passes": 0, "burned_out": 0, "original_name": user}
+    else:
+        # Keep the latest casing
+        channel_data["stats"]["users"][user_lower]["original_name"] = user
+    return channel_data["stats"]["users"][user_lower]
 
 
 def clean_user(name: str) -> str:
@@ -127,31 +130,33 @@ def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_le
     return text_response(f"{user} sparked a joint💨")
 
 
-# ---------- Pass Endpoint with 5% Fumble ----------
+# ---------- Pass Endpoint with fixed fumble ----------
 @app.get("/pass")
 def pass_joint(
     from_user: str = Query(..., min_length=1),
     to_user: str = Query(..., min_length=1),
     channel: str = Query(..., min_length=1)
 ):
-    from_user = clean_user(from_user)
-    to_user = clean_user(to_user)
-    channel = clean_user(channel)
-    ch = get_channel(channel)
+    from_user_clean = clean_user(from_user)
+    to_user_clean = clean_user(to_user)
+    channel_clean = clean_user(channel)
+    ch = get_channel(channel_clean)
     joint = ch["joint"]
 
-    expired = check_timeout(ch, channel)
+    expired = check_timeout(ch, channel_clean)
     if expired:
         return text_response(expired)
 
-    if joint["holder"] != from_user:
+    if joint["holder"] != from_user_clean:
         return text_response(f"{from_user} can’t pass the joint because they don’t have it 👀")
 
     u = get_user(ch, from_user)
 
     # 5% chance to fumble
     if random.random() < 1.00:
-        other_users = [uname for uname in ch["stats"]["users"] if uname != from_user]
+        # Pick a random user who is not the passer
+        other_users = [info["original_name"] for uname, info in ch["stats"]["users"].items()
+                       if uname != from_user_clean.lower()]
         if other_users:
             stepped_user = random.choice(other_users)
         else:
@@ -165,12 +170,10 @@ def pass_joint(
 
         u["burned_out"] += 1
         save_data()
-        return text_response(
-            f"Oh no! {from_user} fumbled the joint and {stepped_user} accidentally stepped on it 🔥💀"
-        )
+        return text_response(f"Oh no! {from_user} fumbled the joint and {stepped_user} accidentally stepped on it 🔥💀")
 
     # Nightbot smokes the joint
-    if to_user.lower() == "nightbot":
+    if to_user_clean.lower() == "nightbot":
         u["passes"] += 1
         ch["stats"]["nightbot_joints"] += 1
 
@@ -184,14 +187,15 @@ def pass_joint(
                              f"Nightbot puff puff... smoked the whole joint, sorry 🔥💨")
 
     # Normal pass
-    joint["holder"] = to_user
+    joint["holder"] = to_user_clean
     joint["passes"] += 1
     joint["last_pass_time"] = datetime.utcnow().isoformat()
     u["passes"] += 1
 
+    # Joint burns after 10 passes
     if joint["passes"] >= 10:
-        last_user = to_user
-        increment_total_joints(channel)
+        last_user = to_user_clean
+        increment_total_joints(channel_clean)
 
         joint["holder"] = None
         joint["burned"] = True
@@ -208,11 +212,11 @@ def pass_joint(
 # ---------- Status Endpoint ----------
 @app.get("/status")
 def status(channel: str = Query(..., min_length=1), silent: bool = False):
-    channel = clean_user(channel)
-    ch = get_channel(channel)
+    channel_clean = clean_user(channel)
+    ch = get_channel(channel_clean)
     joint = ch["joint"]
 
-    expired = check_timeout(ch, channel)
+    expired = check_timeout(ch, channel_clean)
     if expired:
         return text_response(expired)
 
@@ -232,8 +236,8 @@ def status(channel: str = Query(..., min_length=1), silent: bool = False):
 # ---------- Stats Endpoint ----------
 @app.get("/stats")
 def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
-    channel = clean_user(channel)
-    ch = get_channel(channel)
+    channel_clean = clean_user(channel)
+    ch = get_channel(channel_clean)
 
     if user:
         u = get_user(ch, clean_user(user))
@@ -246,9 +250,10 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
         nightbot_joints = ch['stats'].get('nightbot_joints', 0)
 
         burned_list = [
-            (uname, u['burned_out'])
+            (info["original_name"], u['burned_out'])
             for uname, u in ch['stats']['users'].items()
             if u['burned_out'] > 0
+            for info in [u]
         ]
         burned_list.sort(key=lambda x: (-x[1], x[0]))
         top10 = burned_list[:10]
@@ -260,7 +265,6 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
             dropouts_text = "Doink Dropouts → None yet, impressive. 👍"
 
         return text_response(
-            f"{channel}'s Channel → Total joints smoked: {total_joints} | "
+            f"{channel_clean}'s Channel → Total joints smoked: {total_joints} | "
             f"Nightbot smoked: {nightbot_joints} | {dropouts_text}"
         )
-
