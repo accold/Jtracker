@@ -5,7 +5,7 @@ import json
 import os
 import random
 from difflib import SequenceMatcher
-import requests
+from urllib.request import urlopen
 
 app = FastAPI()
 
@@ -66,11 +66,7 @@ def minutes_ago(ts: datetime) -> str:
 
 def increment_total_joints(channel: str):
     ch = get_channel(channel)
-    if "stats" not in ch:
-        ch["stats"] = {"total_joints": 0, "nightbot_joints": 0, "users": {}}
-    if "total_joints" not in ch["stats"]:
-        ch["stats"]["total_joints"] = 0
-    ch["stats"]["total_joints"] += 1
+    ch["stats"]["total_joints"] = ch["stats"].get("total_joints", 0) + 1
     save_data()
 
 def check_timeout(ch, channel_name):
@@ -94,28 +90,28 @@ def check_timeout(ch, channel_name):
 def similar(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
-# ---------- Twitch Users Auto-population ----------
-def populate_users_from_twitch(channel: str):
-    ch = get_channel(channel)
+# ---------- Twitch User Population ----------
+def populate_users_from_twitch(channel):
     try:
-        r = requests.get(f"https://tmi.twitch.tv/group/user/{channel}/chatters", timeout=5)
-        if r.status_code == 200:
-            data_json = r.json()
-            chatters = data_json.get("chatters", {})
-            for role in chatters:
-                for username in chatters[role]:
-                    get_user(ch, username)
-    except Exception:
-        pass  # If Twitch API fails, we just skip
+        url = f"https://tmi.twitch.tv/group/user/{channel}/chatters"
+        with urlopen(url) as resp:
+            data_resp = json.load(resp)
+            ch = get_channel(channel)
+            for role in data_resp.get("chatters", {}):
+                for user in data_resp["chatters"][role]:
+                    get_user(ch, user)
+    except Exception as e:
+        print("Twitch population failed:", e)
 
 # ---------- Spark Endpoint ----------
 @app.get("/spark")
 def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_length=1)):
     user = clean_user(user)
     channel = clean_user(channel)
-    populate_users_from_twitch(channel)
     ch = get_channel(channel)
     joint = ch["joint"]
+
+    populate_users_from_twitch(channel)
 
     expired = check_timeout(ch, channel)
     if expired:
@@ -143,17 +139,16 @@ def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_le
 
 # ---------- Pass Endpoint ----------
 @app.get("/pass")
-def pass_joint(
-    from_user: str = Query(..., min_length=1),
-    to_user: str = Query(..., min_length=1),
-    channel: str = Query(..., min_length=1)
-):
+def pass_joint(from_user: str = Query(..., min_length=1),
+               to_user: str = Query(..., min_length=1),
+               channel: str = Query(..., min_length=1)):
     from_user_clean = clean_user(from_user)
     to_user_clean = clean_user(to_user)
     channel_clean = clean_user(channel)
-    populate_users_from_twitch(channel_clean)
     ch = get_channel(channel_clean)
     joint = ch["joint"]
+
+    populate_users_from_twitch(channel_clean)
 
     expired = check_timeout(ch, channel_clean)
     if expired:
@@ -164,7 +159,7 @@ def pass_joint(
 
     u = get_user(ch, from_user_clean)
 
-    # ---------- Fuzzy Username Resolution ----------
+    # Fuzzy username resolution
     all_usernames = [info["original_name"] for uname, info in ch["stats"]["users"].items()]
     if to_user_clean.lower() != "nightbot":
         best_match = to_user_clean
@@ -177,7 +172,7 @@ def pass_joint(
         if best_ratio >= 0.7:
             to_user_clean = best_match
 
-    # ---------- Fumble Pass ----------
+    # Fumble pass (5%)
     if random.random() < 0.05:
         other_users = [info["original_name"] for uname, info in ch["stats"]["users"].items()
                        if uname.lower() != from_user_clean.lower()]
@@ -192,7 +187,7 @@ def pass_joint(
         save_data()
         return text_response(f"Oh no! {from_user_clean} fumbled the joint and {stepped_user} accidentally stepped on it 🔥💀")
 
-    # ---------- Portal Mishap ----------
+    # Portal mishap (5%)
     if random.random() < 0.05:
         joint["holder"] = from_user_clean
         joint["last_pass_time"] = datetime.utcnow().isoformat()
@@ -200,7 +195,7 @@ def pass_joint(
         save_data()
         return text_response(f"A portal opens! The joint comes back to {from_user_clean} 😵‍💫💨")
 
-    # ---------- Nightbot Handling ----------
+    # Nightbot handling
     if to_user_clean.lower() == "nightbot":
         u["passes"] += 1
         ch["stats"]["nightbot_joints"] += 1
@@ -214,7 +209,7 @@ def pass_joint(
         return text_response(f"{from_user_clean} passed the joint to Nightbot 🤖\n"
                              f"Nightbot puff puff... smoked the whole joint, sorry 🔥💨")
 
-    # ---------- Normal Pass ----------
+    # Normal pass
     joint["holder"] = to_user_clean
     joint["passes"] += 1
     joint["last_pass_time"] = datetime.utcnow().isoformat()
@@ -246,6 +241,7 @@ def status(channel: str = Query(..., min_length=1), silent: bool = False):
     if expired:
         return text_response(expired)
 
+    # Silent mode only responds if joint burned
     if joint["burned"] or not joint["holder"]:
         if silent:
             return text_response("")
