@@ -5,6 +5,7 @@ import json
 import os
 import random
 from difflib import SequenceMatcher
+import requests
 
 app = FastAPI()
 
@@ -93,11 +94,26 @@ def check_timeout(ch, channel_name):
 def similar(a, b):
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
+# ---------- Twitch Users Auto-population ----------
+def populate_users_from_twitch(channel: str):
+    ch = get_channel(channel)
+    try:
+        r = requests.get(f"https://tmi.twitch.tv/group/user/{channel}/chatters", timeout=5)
+        if r.status_code == 200:
+            data_json = r.json()
+            chatters = data_json.get("chatters", {})
+            for role in chatters:
+                for username in chatters[role]:
+                    get_user(ch, username)
+    except Exception:
+        pass  # If Twitch API fails, we just skip
+
 # ---------- Spark Endpoint ----------
 @app.get("/spark")
 def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_length=1)):
     user = clean_user(user)
     channel = clean_user(channel)
+    populate_users_from_twitch(channel)
     ch = get_channel(channel)
     joint = ch["joint"]
 
@@ -135,6 +151,7 @@ def pass_joint(
     from_user_clean = clean_user(from_user)
     to_user_clean = clean_user(to_user)
     channel_clean = clean_user(channel)
+    populate_users_from_twitch(channel_clean)
     ch = get_channel(channel_clean)
     joint = ch["joint"]
 
@@ -229,7 +246,6 @@ def status(channel: str = Query(..., min_length=1), silent: bool = False):
     if expired:
         return text_response(expired)
 
-    # Silent mode only returns empty if joint is burned
     if joint["burned"] or not joint["holder"]:
         if silent:
             return text_response("")
