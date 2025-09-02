@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Query
 from fastapi.responses import PlainTextResponse
 from datetime import datetime, timedelta
-import json, os, random, requests, difflib
+import json, os, random, difflib, urllib.request
 
 app = FastAPI()
 
@@ -87,7 +87,8 @@ def check_timeout(ch, channel_name):
 def get_live_chatters(channel: str):
     try:
         url = f"https://tmi.twitch.tv/group/user/{channel}/chatters"
-        r = requests.get(url, timeout=5).json()
+        with urllib.request.urlopen(url, timeout=5) as response:
+            r = json.load(response)
         return sum(r["chatters"].values(), [])
     except:
         return []
@@ -232,7 +233,7 @@ def status(channel: str = Query(..., min_length=1), silent: bool = False):
 
     # Silent logic: only show if joint burned out
     if silent and (not joint["holder"] or joint["burned"]):
-        return text_response("") if joint["holder"] and not joint["burned"] else text_response(expired or "")
+        return text_response("")
 
     if not joint["holder"] or joint["burned"]:
         return text_response("Nobody has the joint right now. Spark one with !spark ")
