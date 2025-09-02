@@ -245,4 +245,34 @@ def status(channel: str = Query(..., min_length=1), silent: bool = False):
 @app.get("/stats")
 def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
     channel_clean = clean_user(channel)
-    ch = get_channel(channel_clean
+    ch = get_channel(channel_clean)
+
+    if user:
+        u = get_user(ch, clean_user(user))
+        return text_response(
+            f"{user}'s stats → Sparks: {u['sparks']}, Passes: {u['passes']}, "
+            f"Let it burn out: {u['burned_out']}"
+        )
+    else:
+        total_joints = ch['stats'].get('total_joints', 0)
+        nightbot_joints = ch['stats'].get('nightbot_joints', 0)
+
+        burned_list = [
+            (info["original_name"], u['burned_out'])
+            for uname, u in ch['stats']['users'].items()
+            for info in [u]
+            if u['burned_out'] > 0
+        ]
+        burned_list.sort(key=lambda x: (-x[1], x[0]))
+        top10 = burned_list[:10]
+
+        if top10:
+            dropout_lines = " | ".join([f"{name}: {count}" for name, count in top10])
+            dropouts_text = f"Doink Dropouts → {dropout_lines}"
+        else:
+            dropouts_text = "Doink Dropouts → None yet, impressive. 👍"
+
+        return text_response(
+            f"{channel_clean}'s Channel → Total joints smoked: {total_joints} | "
+            f"Nightbot smoked: {nightbot_joints} | {dropouts_text}"
+        )
