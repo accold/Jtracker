@@ -31,7 +31,6 @@ def get_channel(channel: str):
             "stats": {"total_joints": 0, "nightbot_joints": 0, "users": {}}
         }
     else:
-        # Ensure new field exists for old data
         if "nightbot_joints" not in data["channels"][channel]["stats"]:
             data["channels"][channel]["stats"]["nightbot_joints"] = 0
     return data["channels"][channel]
@@ -42,7 +41,6 @@ def get_user(channel_data, user: str):
     if user_lower not in channel_data["stats"]["users"]:
         channel_data["stats"]["users"][user_lower] = {"sparks": 0, "passes": 0, "burned_out": 0, "original_name": user}
     else:
-        # Keep the latest casing
         channel_data["stats"]["users"][user_lower]["original_name"] = user
     return channel_data["stats"]["users"][user_lower]
 
@@ -130,7 +128,7 @@ def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_le
     return text_response(f"{user} sparked a joint💨")
 
 
-# ---------- Pass Endpoint with fixed fumble ----------
+# ---------- Pass Endpoint with fumble and portal mechanics ----------
 @app.get("/pass")
 def pass_joint(
     from_user: str = Query(..., min_length=1),
@@ -152,9 +150,8 @@ def pass_joint(
 
     u = get_user(ch, from_user)
 
-    # 5% chance to fumble
+    # ---------- Fumble Pass ----------
     if random.random() < 0.05:
-        # Pick a random user who is not the passer
         other_users = [info["original_name"] for uname, info in ch["stats"]["users"].items()
                        if uname != from_user_clean.lower()]
         if other_users:
@@ -162,7 +159,6 @@ def pass_joint(
         else:
             stepped_user = "someone unlucky"
 
-        # Burn the joint
         joint["holder"] = None
         joint["burned"] = True
         joint["passes"] = 0
@@ -172,7 +168,15 @@ def pass_joint(
         save_data()
         return text_response(f"Oh no! {from_user} fumbled the joint and {stepped_user} accidentally stepped on it 🔥💀")
 
-    # Nightbot smokes the joint
+    # ---------- Portal Mishap ----------
+    if random.random() < 1.00:
+        joint["holder"] = from_user_clean
+        joint["last_pass_time"] = datetime.utcnow().isoformat()
+        u["passes"] += 1
+        save_data()
+        return text_response(f"A portal opens! The joint comes back to {from_user} 😵‍💫💨")
+
+    # ---------- Nightbot ----------
     if to_user_clean.lower() == "nightbot":
         u["passes"] += 1
         ch["stats"]["nightbot_joints"] += 1
@@ -186,13 +190,12 @@ def pass_joint(
         return text_response(f"{from_user} passed the joint to Nightbot 🤖\n"
                              f"Nightbot puff puff... smoked the whole joint, sorry 🔥💨")
 
-    # Normal pass
+    # ---------- Normal Pass ----------
     joint["holder"] = to_user_clean
     joint["passes"] += 1
     joint["last_pass_time"] = datetime.utcnow().isoformat()
     u["passes"] += 1
 
-    # Joint burns after 10 passes
     if joint["passes"] >= 10:
         last_user = to_user_clean
         increment_total_joints(channel_clean)
@@ -268,4 +271,3 @@ def stats(channel: str = Query(..., min_length=1), user: str = Query(None)):
             f"{channel_clean}'s Channel → Total joints smoked: {total_joints} | "
             f"Nightbot smoked: {nightbot_joints} | {dropouts_text}"
         )
-
