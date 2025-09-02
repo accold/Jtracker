@@ -3,6 +3,7 @@ from fastapi.responses import PlainTextResponse
 from datetime import datetime, timedelta
 import json
 import os
+import random
 
 app = FastAPI()
 
@@ -126,7 +127,7 @@ def spark(user: str = Query(..., min_length=1), channel: str = Query(..., min_le
     return text_response(f"{user} sparked a joint💨")
 
 
-# ---------- Pass Endpoint ----------
+# ---------- Pass Endpoint with 5% Fumble ----------
 @app.get("/pass")
 def pass_joint(
     from_user: str = Query(..., min_length=1),
@@ -146,15 +147,33 @@ def pass_joint(
     if joint["holder"] != from_user:
         return text_response(f"{from_user} can’t pass the joint because they don’t have it 👀")
 
+    u = get_user(ch, from_user)
+
+    # 5% chance to fumble
+    if random.random() < 0.05:
+        other_users = [uname for uname in ch["stats"]["users"] if uname != from_user]
+        if other_users:
+            stepped_user = random.choice(other_users)
+        else:
+            stepped_user = "someone unlucky"
+
+        # Burn the joint
+        joint["holder"] = None
+        joint["burned"] = True
+        joint["passes"] = 0
+        joint["last_pass_time"] = None
+
+        u["burned_out"] += 1
+        save_data()
+        return text_response(
+            f"Oh no! {from_user} fumbled the joint and {stepped_user} accidentally stepped on it 🔥💀"
+        )
+
     # Nightbot smokes the joint
     if to_user.lower() == "nightbot":
-        u = get_user(ch, from_user)
         u["passes"] += 1
-
-        # Increment Nightbot-only counter
         ch["stats"]["nightbot_joints"] += 1
 
-        # Reset joint
         joint["holder"] = None
         joint["burned"] = True
         joint["passes"] = 0
@@ -168,7 +187,6 @@ def pass_joint(
     joint["holder"] = to_user
     joint["passes"] += 1
     joint["last_pass_time"] = datetime.utcnow().isoformat()
-    u = get_user(ch, from_user)
     u["passes"] += 1
 
     if joint["passes"] >= 10:
